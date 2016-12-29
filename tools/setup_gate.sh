@@ -34,18 +34,15 @@ timeout = 60
 index-url = $NODEPOOL_PYPI_MIRROR
 trusted-host = $NODEPOOL_MIRROR_HOST
 EOF
-    cat > /etc/kolla/template-override.j2 <<EOF
-{% block header %}
-RUN echo $(base64 -w0 ${PIP_CONF}) | base64 -d > /etc/pip.conf
-{% endblock %}
-EOF
-
+    echo "RUN echo $(base64 -w0 ${PIP_CONF}) | base64 -d > /etc/pip.conf" | sudo tee /etc/kolla/header
     rm ${PIP_CONF}
+    sed -i 's|^#include_header.*|include_header = /etc/kolla/header|' /etc/kolla/kolla-build.conf
+
     # NOTE(Jeffrey4l): use different a docker namespace name in case it pull image from hub.docker.io when deplying
     sed -i 's|^#namespace.*|namespace = lokolla|' /etc/kolla/kolla-build.conf
 
     if [[ "${DISTRO}" == "Debian" ]]; then
-        # Infra does not sign their mirrors so we ignore gpg signing in the gate
+        # Infra does not sign thier mirrors so we ignore gpg signing in the gate
         echo "RUN echo 'APT::Get::AllowUnauthenticated \"true\";' > /etc/apt/apt.conf" | sudo tee -a /etc/kolla/header
 
         # Optimize the repos to take advantage of the Infra provided mirrors for Ubuntu
@@ -147,17 +144,10 @@ function setup_logging {
     mkdir -p /tmp/logs/{ansible,build,kolla,kolla_configs,system_logs}
 }
 
-function setup_registry {
-    sudo mkdir /tmp/kolla_registry
-    sudo chmod -R 644 /tmp/kolla_registry
-    docker run -d -p 4000:5000 --restart=always -v /tmp/kolla_registry/:/var/lib/registry --name registry registry:2
-}
-
 setup_logging
 tools/dump_info.sh
 setup_workaround_broken_nodepool
 setup_ssh
 setup_ansible
 setup_node
-setup_registry
 setup_config

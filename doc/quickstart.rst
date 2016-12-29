@@ -4,7 +4,7 @@
 Quick Start
 ===========
 
-This guide provides a step by step procedure to deploy Kolla on bare metal or a
+This guide provides a step by step of how to deploy Kolla on bare metal or a
 virtual machine.
 
 Host machine requirements
@@ -13,8 +13,8 @@ Host machine requirements
 The recommended deployment target requirements:
 
 - 2 (or more) network interfaces.
-- At least 8GB main memory.
-- At least 40GB disk space.
+- At least 8gb main memory
+- At least 40gb disk space.
 
 .. note:: Some commands below may require root permissions (e.g. pip, apt-get).
 
@@ -65,8 +65,8 @@ to add .xz compressed format support.
 Ubuntu: For Ubuntu based systems where Docker is used it is recommended to use
 the latest available LTS kernel. The latest LTS kernel available is the wily
 kernel (version 4.2). While all kernels should work for Docker, some older
-kernels may have issues with some of the different Docker back ends such as
-AUFS and OverlayFS. In order to update kernel in Ubuntu 14.04 LTS to 4.2, run:
+kernels may have issues with some of the different Docker backends such as AUFS
+and OverlayFS. In order to update kernel in Ubuntu 14.04 LTS to 4.2, run:
 
 ::
 
@@ -141,9 +141,9 @@ following command:
     curl -sSL https://get.docker.io | bash
 
 This command will install the most recent stable version of Docker, but please
-note that Kolla releases are not in sync with Docker in any way, so some things
+note that Kolla releases are not in sync with docker in any way, so some things
 could stop working with new version. The latest release of Kolla is tested to
-work with docker-engine >= 1.10.0. To check your Docker version run this
+work with docker-engine >= 1.10.0. To check your docker version run this
 command:
 
 ::
@@ -155,7 +155,7 @@ in the Docker daemon to launch with. This means setting up the following
 information in the ``docker.service`` file. If you do not set the MountFlags
 option correctly then ``kolla-ansible`` will fail to deploy the
 ``neutron-dhcp-agent`` container and throws APIError/HTTPError. After adding
-the drop-in unit file as follows, reload and restart the Docker service:
+the drop-in unit file as follows, reload and restart the docker service:
 
 ::
 
@@ -168,7 +168,7 @@ the drop-in unit file as follows, reload and restart the Docker service:
     MountFlags=shared
     EOF
 
-Restart Docker by executing the following commands:
+Restart docker by executing the following commands:
 
 ::
 
@@ -182,27 +182,17 @@ run the following:
 ::
 
     mount --make-shared /run
-    mount --make-shared /var/lib/nova/mnt
 
-If ``/var/lib/nova/mnt`` is not partitioned, can do below work around
-
-::
-
-    mkdir -p /var/lib/nova/mnt /var/lib/nova/mnt1
-    mount --bind /var/lib/nova/mnt1 /var/lib/nova/mnt
-    mount --make-shared /var/lib/nova/mnt
-
-For mounting ``/run`` and ``/var/lib/nova/mnt`` as shared upon startup,
-add below commands to ``/etc/rc.local``
+For mounting ``/run`` as shared upon startup, add that command to
+``/etc/rc.local``
 
 ::
 
     # Edit /etc/rc.local to add:
     mount --make-shared /run
-    mount --make-shared /var/lib/nova/mnt
 
-.. note:: If centos/fedora/oraclelinux container images are built on an Ubuntu
-  host, the back-end storage driver must not be AUFS (see the known issues in
+.. note:: If centos/oraclelinux container images are built on an Ubuntu
+  host, the backend storage driver must not be AUFS (see the known issues in
   :doc:`image-building`).
 
 .. note:: On ubuntu 16.04, please uninstall ``lxd`` and ``lxc`` packages. (issue
@@ -218,7 +208,7 @@ libraries:
     yum install python-docker-py
 
 
-Or using ``pip`` to install the latest version:
+Or using ``pip`` to install a latest version:
 
 ::
 
@@ -393,7 +383,7 @@ Local Registry
 A local registry is not required for an ``all-in-one`` installation. Check out
 the :doc:`multinode` for more information on using a local registry. Otherwise,
 the `Docker Hub Image Registry`_ contains all images from each of Kolla's major
-releases. The latest release tag is 3.0.0 for Newton.
+releases. The latest release tag is 2.0.0 for Mitaka.
 
 Additional Environments
 =======================
@@ -414,7 +404,7 @@ Kolla, but if running from master, it is recommended to build images locally.
 
 Checkout the :doc:`image-building` for more advanced build configuration.
 
-Before running the below instructions, ensure the Docker daemon is running
+Before running the below instructions, ensure the docker daemon is running
 or the build process will fail. To build images using default parameters run:
 
 ::
@@ -429,6 +419,12 @@ behavior, please use the following parameters with ``kolla-build``:
 
 --base [ubuntu|centos|oraclelinux]
 --type [binary|source]
+
+If pushing to a local registry (recommended) use the flags:
+
+::
+
+    kolla-build --registry registry_ip_address:registry_ip_port --push
 
 Note ``--base`` and ``--type`` can be added to the above ``kolla-build``
 command if different distributions or types are desired.
@@ -517,11 +513,18 @@ veth pair is listed here and the other end is in a bridge on the system. ::
 
     neutron_external_interface: "eth1"
 
+If using a local docker registry, set the ``docker_registry`` information where
+the local registry is operating on IP address 192.168.1.100 and the port 4000.
+
+::
+
+    docker_registry: "192.168.1.100:4000"
+
 For *all-in-one* deploys, the following commands can be run. These will
 setup all of the containers on the localhost. These commands will be
 wrapped in the kolla-script in the future.
 
-.. note:: Even for all-in-one installs it is possible to use the Docker
+.. note:: Even for all-in-one installs it is possible to use the docker
    registry for deployment, although not strictly required.
 
 First, check that the deployment targets are in a state where Kolla may deploy
@@ -565,7 +568,7 @@ In order to see all available parameters, run:
 
 ::
 
-    egrep -c '(vmx|svm)' /proc/cpuinfo
+    $ egrep -c '(vmx|svm)' /proc/cpuinfo
 
 
 If this command returns a value of **zero**, your compute node does not
@@ -648,7 +651,7 @@ Any time the tags of a release change, it is possible that the container
 implementation from older versions won't match the Ansible playbooks in a new
 version. If running multinode from a registry, each node's Docker image cache
 must be refreshed with the latest images before a new deployment can occur. To
-refresh the Docker cache from the local Docker registry:
+refresh the docker cache from the local Docker registry:
 
 ::
 

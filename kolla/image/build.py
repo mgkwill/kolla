@@ -47,7 +47,6 @@ if PROJECT_ROOT not in sys.path:
 
 from kolla.common import config as common_config
 from kolla.common import task
-from kolla import exception
 from kolla.template import filters as jinja_filters
 from kolla.template import methods as jinja_methods
 from kolla import version
@@ -75,6 +74,23 @@ def make_a_logger(conf=None, image_name=None):
 
 
 LOG = make_a_logger()
+
+
+class KollaDirNotFoundException(Exception):
+    pass
+
+
+class KollaUnknownBuildTypeException(Exception):
+    pass
+
+
+class KollaMismatchBaseTypeException(Exception):
+    pass
+
+
+class KollaRpmSetupUnknownConfig(Exception):
+    pass
+
 
 # Image status constants.
 #
@@ -266,8 +282,6 @@ class BuildTask(DockerTask):
             ])
         if self.image.children and self.success:
             for image in self.image.children:
-                if image.status == STATUS_UNMATCHED:
-                    continue
                 followups.append(BuildTask(self.conf, image, self.push_queue))
         return followups
 
@@ -507,7 +521,7 @@ class KollaWorker(object):
 
         if not ((self.base in rh_base and self.install_type in rh_type) or
                 (self.base in deb_base and self.install_type in deb_type)):
-            raise exception.KollaMismatchBaseTypeException(
+            raise KollaMismatchBaseTypeException(
                 '{} is unavailable for {}'.format(self.install_type, self.base)
             )
 
@@ -522,12 +536,14 @@ class KollaWorker(object):
             self.install_type = 'binary'
             self.install_metatype = 'rhos'
         else:
-            raise exception.KollaUnknownBuildTypeException(
+            raise KollaUnknownBuildTypeException(
                 'Unknown install type'
             )
 
         self.image_prefix = self.base + '-' + self.install_type + '-'
 
+        self.include_header = conf.include_header
+        self.include_footer = conf.include_footer
         self.regex = conf.regex
         self.image_statuses_bad = dict()
         self.image_statuses_good = dict()
@@ -549,8 +565,7 @@ class KollaWorker(object):
                 LOG.info('Found the docker image folder at %s', image_path)
                 return image_path
         else:
-            raise exception.KollaDirNotFoundException('Image dir can not '
-                                                      'be found')
+            raise KollaDirNotFoundException('Image dir can not be found')
 
     def build_rpm_setup(self, rpm_setup_config):
         """Generates a list of docker commands based on provided configuration.
@@ -574,7 +589,7 @@ class KollaWorker(object):
                     # Copy .repo file from filesystem
                     cmd = "COPY {} /etc/yum.repos.d/".format(config)
             else:
-                raise exception.KollaRpmSetupUnknownConfig(
+                raise KollaRpmSetupUnknownConfig(
                     'RPM setup must be provided as .rpm or .repo files.'
                     ' Attempted configuration was {}'.format(config)
                 )
@@ -669,6 +684,12 @@ class KollaWorker(object):
                 env.filters.update(self._get_filters())
                 env.globals.update(self._get_methods())
                 template = env.get_template(template_name)
+            if self.include_header:
+                with open(self.include_header, 'r') as f:
+                    values['include_header'] = f.read()
+            if self.include_footer:
+                with open(self.include_footer, 'r') as f:
+                    values['include_footer'] = f.read()
             content = template.render(values)
             content_path = os.path.join(path, 'Dockerfile')
             with open(content_path, 'w') as f:
@@ -739,11 +760,6 @@ class KollaWorker(object):
                 LOG.debug("Image %s failed", image.name)
 
         self.get_image_statuses()
-        results = {
-            'built': [],
-            'failed': [],
-            'not_matched': [],
-        }
 
         if self.image_statuses_good:
             LOG.info("=========================")
@@ -751,9 +767,6 @@ class KollaWorker(object):
             LOG.info("=========================")
             for name in self.image_statuses_good.keys():
                 LOG.info(name)
-                results['built'].append({
-                    'name': name,
-                })
 
         if self.image_statuses_bad:
             LOG.info("===========================")
@@ -761,10 +774,6 @@ class KollaWorker(object):
             LOG.info("===========================")
             for name, status in self.image_statuses_bad.items():
                 LOG.error('%s Failed with status: %s', name, status)
-                results['failed'].append({
-                    'name': name,
-                    'status': status,
-                })
 
         if self.image_statuses_unmatched:
             LOG.debug("=====================================")
@@ -772,11 +781,6 @@ class KollaWorker(object):
             LOG.debug("=====================================")
             for name in self.image_statuses_unmatched.keys():
                 LOG.debug(name)
-                results['not_matched'].append({
-                    'name': name,
-                })
-
-        return results
 
     def get_image_statuses(self):
         if any([self.image_statuses_bad,
@@ -1014,8 +1018,7 @@ def run_build():
             queue.put(WorkerThread.tombstone)
             raise
 
-    results = kolla.summary()
+    kolla.summary()
     kolla.cleanup()
-    if conf.format == 'json':
-        print(json.dumps(results))
+
     return kolla.get_image_statuses()

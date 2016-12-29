@@ -10,14 +10,12 @@ MAINTAINER {{ maintainer }}
 
         {% set neutron_openvswitch_agent_packages = [
             'openstack-neutron-openvswitch',
-            'openvswitch'
         ] %}
 
     {% elif base_distro in ['ubuntu'] %}
 
         {% set neutron_openvswitch_agent_packages = [
             'neutron-plugin-openvswitch-agent',
-            'openvswitch-switch'
         ] %}
 
     {% endif %}

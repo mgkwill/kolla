@@ -4,7 +4,7 @@
 Building Container Images
 =========================
 
-The ``kolla-build`` command is responsible for building Docker images.
+The ``kolla-build`` command is responsible for building docker images.
 
 .. note::
 
@@ -54,6 +54,10 @@ There are following distros available for building images:
    Fedora images are deprecated since Newton and will be removed
    in the future.
 
+To push the image after building, add ``--push``::
+
+    kolla-build --push
+
 It is possible to build only a subset of images by specifying them on the
 command line::
 
@@ -91,15 +95,17 @@ Or put following line to ``DEFAULT`` section in ``kolla-build.conf`` ::
 
 
 ``kolla-build`` uses ``kolla`` as default Docker namespace. This is
-controlled with the ``-n`` command line option. To push images to a Dockerhub
+controlled with the ``-n`` command line option. To push images to a dockerhub
 repository named ``mykollarepo``::
 
     kolla-build -n mykollarepo --push
 
-To push images to a :ref:`local registry<deploy_a_registry>`, use
-``--registry`` flag::
+To push images to a local registry, use ``--registry`` flag::
 
-    kolla-build --registry 172.22.2.81:5000 --push
+    kolla-build --registry 172.22.2.81:4000 --push
+
+To trigger the build script to pull images from a local registry, the Docker
+configuration needs to be modified. See `Docker Insecure Registry Config`_.
 
 The build configuration can be customized using a config file, the default
 location being one of ``/etc/kolla/kolla-build.conf`` or
@@ -124,7 +130,7 @@ The locations of OpenStack source code are written in
 Now the source type supports ``url``, ``git``, and ``local``. The location of
 the ``local`` source type can point to either a directory containing the source
 code or to a tarball of the source. The ``local`` source type permits to make
-the best use of the Docker cache.
+the best use of the docker cache.
 
 ``etc/kolla/kolla-build.conf`` looks like::
 
@@ -145,13 +151,20 @@ the best use of the Docker cache.
     type = local
     location = /tmp/ironic.tar.gz
 
-To build RHEL containers, it is necessary to include registration with RHN
-of the container runtime operating system.  To obtain a RHN
-username/password/pool id, contact Red Hat.  Use a template's header block
-overrides file, add the following::
+To build RHEL containers, it is necessary to use the ``-i`` (include header)
+feature to include registration with RHN of the container runtime operating
+system. To obtain a RHN username/password/pool id, contact Red Hat.
 
-    RUN subscription-manager register --user=<user-name> \
-    --password=<password> && subscription-manager attach --pool <pool-id>
+First create a file called ``rhel-include``:
+
+::
+
+    RUN subscription-manager register --user=<user-name> --password=<password> \
+    && subscription-manager attach --pool <pool-id>
+
+Then build RHEL containers::
+
+    kolla-build -b rhel -i ./rhel-include
 
 Dockerfile Customisation
 ========================
@@ -337,13 +350,13 @@ follows::
 Known issues
 ============
 
-#. Can't build base image because Docker fails to install systemd or httpd.
+#. Can't build base image because docker fails to install systemd or httpd.
 
-   There are some issues between Docker and AUFS. The simple workaround to
+   There are some issues between docker and AUFS. The simple workaround to
    avoid the issue is that add ``-s devicemapper`` or ``-s btrfs`` to
    ``DOCKER_OPTS``. Get more information about `the issue from the Docker bug
    tracker <https://github.com/docker/docker/issues/6980>`_ and `how to
-   configure Docker with BTRFS back end <https://docs.docker.com/engine/userguide/storagedriver/btrfs-driver/#prerequisites>`_.
+   configure Docker with BTRFS backend <https://docs.docker.com/engine/userguide/storagedriver/btrfs-driver/#prerequisites>`_.
 
 #. Mirrors are unreliable.
 
@@ -352,33 +365,88 @@ Known issues
    will automatically attempt three retries of a build operation if the first
    one fails. The retry count is modified with the ``--retries`` option.
 
+Docker Local Registry
+=====================
+
+It is recommended to set up local registry for Kolla developers or deploying
+*multinode*. The reason using a local registry is deployment performance will
+operate at local network speeds, typically gigabit networking. Beyond
+performance considerations, the Operator would have full control over images
+that are deployed. If there is no local registry, nodes pull images from Docker
+Hub when images are not found in local caches.
+
+Setting up Docker Local Registry
+--------------------------------
+
+Running Docker registry is easy. Just use the following command::
+
+   docker run -d -p 4000:5000 --restart=always --name registry \
+   -v <local_data_path>:/var/lib/registry registry
+
+.. note:: ``<local_data_path>`` points to the folder where Docker registry
+          will store Docker images on the local host.
+
+The default port of Docker registry is 5000. But the 5000 port is also the port
+of keystone-api. To avoid conflict, use 4000 port as Docker registry port.
+
+Now the Docker registry service is running.
+
+Docker Insecure Registry Config
+-------------------------------
+
+For docker to pull images, it is necessary to modify the Docker configuration.
+The guide assumes that the IP of the machine running Docker registry is
+172.22.2.81.
+
+In Ubuntu, add ``--insecure-registry 172.22.2.81:4000``
+to ``DOCKER_OPTS`` in ``/etc/default/docker``.
+
+In CentOS, uncomment ``INSECURE_REGISTRY`` and set ``INSECURE_REGISTRY``
+to ``--insecure-registry 172.22.2.81:4000`` in ``/etc/sysconfig/docker``.
+
+And restart the docker service.
+
+To build and push images to local registry, use the following command::
+
+    kolla-build --registry 172.22.2.81:4000 --push
+
 Kolla-ansible with Local Registry
 ---------------------------------
 
-To make kolla-ansible pull images from a local registry, set
-``"docker_registry"`` to ``"172.22.2.81:5000"`` in
+To make kolla-ansible pull images from local registry, set
+``"docker_registry"`` to ``"172.22.2.81:4000"`` in
 ``"/etc/kolla/globals.yml"``. Make sure Docker is allowed to pull images from
-insecure registry. See
-:ref:`Docker Insecure Registry Config <deploy_a_registry>`.
+insecure registry. See `Docker Insecure Registry Config`_.
+
 
 Building behind a proxy
 -----------------------
 
-We can insert http_proxy settings into the images to
+The build script supports augmenting the Dockerfiles under build via so called
+`header` and `footer` files. Statements in the `header` file are included at
+the top of the `base` image, while those in `footer` are included at the bottom
+of every Dockerfile in the build.
+
+A common use case for this is to insert http_proxy settings into the images to
 fetch packages during build, and then unset them at the end to avoid having
 them carry through to the environment of the final images. Note however, it's
 not possible to drop the info completely using this method; it will still be
 visible in the layers of the image.
 
-To set the proxy settings, we can add this to the template's header block::
+To use this feature, create a file called ``.header``, with the following
+content for example::
 
     ENV http_proxy=https://evil.corp.proxy:80
     ENV https_proxy=https://evil.corp.proxy:80
 
-To unset the proxy settings, we can add this to the template's footer block::
+Then create another file called ``.footer``, with the following content::
 
     ENV http_proxy=""
     ENV https_proxy=""
+
+Finally, pass them to the build script using the ``-i`` and ``-I`` flags::
+
+    kolla-build -i .header -I .footer
 
 Besides this configuration options, the script will automatically read these
 environment variables. If the host system proxy parameters match the ones

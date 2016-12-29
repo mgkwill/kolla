@@ -17,7 +17,6 @@ import os
 import requests
 
 from kolla.cmd import build as build_cmd
-from kolla import exception
 from kolla.image import build
 from kolla.tests import base
 
@@ -171,7 +170,7 @@ class KollaWorkerTest(base.TestCase):
                 ['ubuntu', 'debian'], ['rdo', 'rhos']):
             self.conf.set_override('base', base_distro)
             self.conf.set_override('install_type', install_type)
-            self.assertRaises(exception.KollaMismatchBaseTypeException,
+            self.assertRaises(build.KollaMismatchBaseTypeException,
                               build.KollaWorker, self.conf)
 
     def test_build_image_list_adds_plugins(self):
@@ -189,16 +188,11 @@ class KollaWorkerTest(base.TestCase):
             'source': 'https://git.openstack.org/openstack/networking-arista',
             'type': 'git'
         }
-
-        found = False
         for image in kolla.images:
             if image.name == 'neutron-server':
-                for plugin in image.plugins:
-                    if plugin == expected_plugin:
-                        found = True
-                        break
+                self.assertEqual(image.plugins[0], expected_plugin)
                 break
-        if not found:
+        else:
             self.fail('Can not find the expected neutron arista plugin')
 
     def test_build_image_list_plugin_parsing(self):
