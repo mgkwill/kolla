@@ -1,0 +1,47 @@
+FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+MAINTAINER {{ maintainer }}
+
+{% block opendaylight_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% set opendaylight_packages = [
+            'java-1.7.0-openjdk',
+            'wget',
+            'git'
+        ] %}
+
+{% elif base_distro in ['ubuntu', 'debian'] %}
+    {% set opendaylight_packages = [
+            'openjdk-7-jre',
+            'wget',
+            'git'
+        ] %}
+
+{% endif %}
+{{ macros.install_packages(opendaylight_packages | customizable("packages")) }}
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+ENV JAVA_HOME /usr/lib/jvm/jre-1.7.0-openjdk
+{% elif base_distro in ['ubuntu', 'debian'] %}
+ENV JAVA_HOME /usr/lib/jvm/java-1.7.0-openjdk-amd64
+{% endif %}
+
+ENV JAVA_MIN_MEM {{ odl_java_min_mem }}
+ENV JAVA_MAX_MEM {{ odl_java_max_mem }}
+ENV JAVA_MAX_PERM_MEM {{ odl_java_max_perm_mem }}
+
+RUN mkdir /opt/odl && cd /opt/odl && \
+    wget {{ odl_url_prefix }}/{{ odl_url_release_repository_path }}/org/opendaylight/integration/distribution-karaf/{{ odl_release }}/{{ odl_release }}.tar.gz && \
+    sleep 3 && \
+    tar -xvzf {{ odl_release }}.tar.gz
+
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+
+RUN touch /usr/local/bin/kolla_opendaylight_extend_start \
+    && chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/kolla_opendaylight_extend_start
+
+{% block opendaylight_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+{{ include_footer }}
